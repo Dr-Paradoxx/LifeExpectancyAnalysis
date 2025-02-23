@@ -33,8 +33,9 @@ The dataset is sourced from Kaggle: [Life Expectancy - WHO](https://www.kaggle.c
    git clone https://github.com/yourusername/LifeExpectancyAnalysis.git
    
 2.	Install required R packages:
-   ```sh
-   install.packages(c("ggplot2", "dplyr", "corrplot", "caret"))
-  	
+    ```sh
+    install.packages(c("ggplot2", "dplyr", "corrplot", "caret"))
+
 3.	Run the analysis:
-    source("src/analysis.R")
+   ```sh
+   source("src/analysis.R")

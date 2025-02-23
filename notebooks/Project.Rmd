@@ -1,0 +1,461 @@
+---
+title: "Group 14"
+author: "MAHESHWAR VANGAPATY"
+date: "2024-04-27"
+output: word_document
+---
+
+### Required Packages
+
+#Installation of Packages
+
+```{r}
+install.packages(c("dplyr", "ggplot2", "reshape2", "tidyr", "corrplot", "car", "lmtest", "MASS", "broom", "GGally"))
+```
+
+
+# Importing Libraries 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(tidyr)
+library(corrplot)
+library(car)
+library(lmtest)
+library(MASS)
+library(broom)
+library(GGally)
+```
+
+
+### 1. Data Collection
+
+# Data Loading and Initial Exploration
+
+```{r}
+data <- read.csv("Life Expectancy Data.csv")
+head(data)
+str(data)
+```
+
+
+```{r}
+dim(data)
+```
+
+
+```{r}
+names(data)
+```
+### 2. Data Cleaning
+
+# 2.1 Remove extra spaces in column names
+
+```{r}
+names(data) <- gsub("\\s+", "", names(data))
+print(names(data))
+```
+
+# 2.2 Selecting Relevant Variables and Checking the structure of the selected data
+
+```{r}
+selected_data <- data[, !(names(data) %in% c("Country", "Year", "Population"))]
+str(selected_data)
+```
+
+# 2.3 Handling Missing Values
+
+```{r}
+missing_values <- sapply(selected_data, function(x) sum(is.na(x)))
+missing_values
+```
+
+#Removing Rows with Missing Values
+
+```{r}
+selected_data1= na.omit(selected_data)
+selected_data1
+```
+
+#Verifying Missing Values After Removal
+
+```{r}
+missing_values <- sapply(selected_data1, function(x) sum(is.na(x)))
+missing_values
+```
+### 3. Exploratory Data Analysis
+#Data Summary
+```{r}
+summary(selected_data1)
+```
+
+
+# 3.1 Outlier Detection
+
+```{r}
+count_outliers <- function(x) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = TRUE)
+  iqr <- IQR(x, na.rm = TRUE)
+  lower <- qnt[1] - 1.5 * iqr
+  upper <- qnt[2] + 1.5 * iqr
+  return(sum(x < lower | x > upper, na.rm = TRUE))
+}
+outlier_counts <- sapply(selected_data1[, sapply(selected_data1, is.numeric)], count_outliers)
+outlier_counts
+```
+# Percentage of outliers
+
+```{r}
+# Calculate percentage of outliers for each column
+outlier_percentages <- (outlier_counts / sapply(selected_data1[, sapply(selected_data1, is.numeric)], length)) * 100
+outlier_percentages
+# Calculate total percentage of outliers
+total_outliers <- sum(outlier_counts)
+total_non_missing_values <- sum(sapply(selected_data1[, sapply(selected_data1, is.numeric)], length))
+total_outlier_percentage <- (total_outliers / total_non_missing_values) * 100
+total_outlier_percentage
+```
+# 3.2 Visualizing Outliers
+
+```{r}
+num_cols <- length(names(selected_data1)[sapply(selected_data1, is.numeric)])
+batches <- ceiling(num_cols / 9)  # Adjust the denominator to change batch size
+
+for (i in 1:batches) {
+  par(mfrow=c(3, 3), mar=c(2, 2, 2, 2))  # Adjust layout and margins as necessary
+  start_col <- (i - 1) * 9 + 1
+  end_col <- min(i * 9, num_cols)
+  for (col in names(selected_data1)[sapply(selected_data1, is.numeric)][start_col:end_col]) {
+    boxplot(selected_data1[[col]], main=col, col="lightblue", ylab="Values", xlab=col, cex.axis=0.7, cex.main=0.8)
+  }
+  par(mfrow=c(1, 1))
+}
+```
+
+# 3.3 Defining and Applying the Capping Function
+
+```{r}
+cap_outliers <- function(x) {
+  qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  iqr <- IQR(x, na.rm = TRUE)
+  lower <- qnt[1] - 1.5 * iqr
+  upper <- qnt[2] + 1.5 * iqr
+  x[x < lower] <- lower
+  x[x > upper] <- upper
+  return(x)
+}
+
+
+numeric_cols <- sapply(selected_data1, is.numeric)
+selected_data1[, numeric_cols] <- lapply(selected_data1[, numeric_cols], cap_outliers)
+selected_data1
+```
+
+```{r}
+# Function to count outliers in a variable
+count_outliers <- function(x) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = TRUE)
+  iqr <- IQR(x, na.rm = TRUE)
+  lower <- qnt[1] - 1.5 * iqr
+  upper <- qnt[2] + 1.5 * iqr
+  return(sum(x < lower | x > upper, na.rm = TRUE))
+}
+
+outlier_counts <- sapply(selected_data1[, sapply(selected_data1, is.numeric)], count_outliers)
+outlier_counts
+```
+
+# 3.4 Verifying Outliers After Capping
+
+```{r}
+num_cols <- length(names(selected_data1)[sapply(selected_data1, is.numeric)])
+batches <- ceiling(num_cols / 9)  
+
+for (i in 1:batches) {
+  par(mfrow=c(3, 3), mar=c(2, 2, 2, 2)) 
+  start_col <- (i - 1) * 9 + 1
+  end_col <- min(i * 9, num_cols)
+  for (col in names(selected_data1)[sapply(selected_data1, is.numeric)][start_col:end_col]) {
+    boxplot(selected_data1[[col]], main=col, col="yellow", ylab="Values", xlab=col, cex.axis=0.7, cex.main=0.8)
+  }
+  par(mfrow=c(1, 1))
+}
+
+```
+
+# 4 Checking for Normality
+
+```{r}
+all_cols <- names(selected_data1)
+num_cols <- length(all_cols)
+batches <- ceiling(num_cols / 9)  # Adjust the denominator to change batch size
+
+for (i in 1:batches) {
+  par(mfrow=c(3, 3), mar=c(2, 2, 2, 2))  # Adjust layout and margins as necessary
+  start_col <- (i - 1) * 9 + 1
+  end_col <- min(i * 9, num_cols)
+  for (col in all_cols[start_col:end_col]) {
+    if (is.numeric(selected_data1[[col]]) && !any(is.na(selected_data1[[col]]))) {
+      qqnorm(selected_data1[[col]], main=col, col="blue")
+      qqline(selected_data1[[col]], col="red")
+    } else {
+      plot.new()  
+    }
+  }
+  par(mfrow=c(1, 1))
+}
+
+```
+
+#4.1 Data Transformation
+
+```{r}
+selected_data1_log <- selected_data1
+selected_data1_log[, sapply(selected_data1_log, is.numeric)] <- lapply(selected_data1_log[, sapply(selected_data1_log, is.numeric)], log)
+str(selected_data1_log)
+```
+
+
+
+
+### 5. Data Visualization
+
+# 5.1 Exploring Distributions and Relationships
+
+# Scatter plot of Life Expectancy vs. GDP
+
+```{r}
+library(ggplot2)
+ggplot(selected_data1, aes(x = GDP, y = Life.expectancy)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  ggtitle("Scatter Plot of Life Expectancy vs. GDP") +
+  xlab("GDP") +
+  ylab("Life Expectancy")
+```
+
+#Scatter plot of Life Expectancy vs. Schooling
+
+```{r}
+ggplot(selected_data1, aes(x = Schooling, y = Life.expectancy)) +
+  geom_point(alpha = 0.5, color = "green") +
+  geom_smooth(method = "lm", se = FALSE, color = "darkgreen") +
+  ggtitle("Scatter Plot of Life Expectancy vs. Schooling") +
+  xlab("Schooling") +
+  ylab("Life Expectancy")
+
+```
+
+#Histogram for Alcohol Consumption
+
+```{r}
+# Histogram for Alcohol Consumption
+ggplot(selected_data1, aes(x = Alcohol)) +
+  geom_histogram(bins = 20, fill = "purple", color = "white") +
+  ggtitle("Histogram of Alcohol Consumption") +
+  xlab("Alcohol Consumption per capita") +
+  ylab("Frequency")
+
+```
+
+# 5.2 Boxplots and Histograms for Distribution Analysis
+
+#Boxplot for Life Expectancy by Status (Developed vs Developing)
+
+```{r}
+ggplot(selected_data1, aes(x = Status, y = Life.expectancy, fill = Status)) +
+  geom_boxplot() +
+  ggtitle("Life Expectancy by Country Status") +
+  xlab("Status") +
+  ylab("Life Expectancy")
+```
+
+#Density plot for Life Expectancy by Status
+
+```{r}
+ggplot(selected_data1, aes(x = Life.expectancy, fill = Status)) +
+  geom_density(alpha = 0.5) +
+  ggtitle("Density Plot of Life Expectancy by Status") +
+  xlab("Life Expectancy") +
+  ylab("Density")
+```
+
+# 5.3 Advanced Relationship Analysis with Faceted and Colored Plots
+
+#Faceted scatter plot for Life Expectancy vs. BMI, separated by Status
+
+```{r}
+ggplot(selected_data1, aes(x = BMI, y = Life.expectancy)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~Status) +
+  ggtitle("Life Expectancy vs. BMI by Country Status") +
+  xlab("BMI") +
+  ylab("Life Expectancy") +
+  theme_minimal()
+```
+
+#Scatter plot of Life Expectancy vs. Alcohol Consumption with regression line
+
+```{r}
+ggplot(selected_data1, aes(x = Alcohol, y = Life.expectancy)) +
+  geom_point(aes(color = Status), alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  ggtitle("Life Expectancy vs. Alcohol Consumption") +
+  xlab("Alcohol Consumption (per capita)") +
+  ylab("Life Expectancy") +
+  theme_minimal()
+```
+
+# 5.4 Histogram for BMI
+
+```{r}
+ggplot(selected_data1, aes(x = BMI)) +
+  geom_histogram(bins = 20, fill = "orange", color = "white") +
+  ggtitle("Histogram of BMI") +
+  xlab("BMI") +
+  ylab("Frequency")
+```
+
+# 5.5 Correlation Heatmap
+
+```{r}
+# Correlation matrix
+cor_matrix <- cor(selected_data1[, sapply(selected_data1, is.numeric)], use = "complete.obs")
+
+library(reshape2)
+melted_cor_matrix <- melt(cor_matrix)
+
+# Heatmap with correlation coefficients
+library(ggplot2)
+ggplot(melted_cor_matrix, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.2f", value)), color = "black", size = 3) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.y = element_text(angle = 0, hjust = 1)) +
+  ggtitle("Correlation Heatmap")
+
+```
+
+
+### 6.Statistical Modeling
+
+# 6.1 Model Selection
+
+```{r}
+numeric_cols <- names(selected_data1)[sapply(selected_data1, is.numeric)]
+
+numeric_cols <- numeric_cols[numeric_cols != "Life.expectancy"]
+num_cols <- length(numeric_cols)
+batches <- ceiling(num_cols / 9)  
+
+for (i in 1:batches) {
+  par(mfrow = c(3, 3), mar = c(2, 2, 2, 2))  
+  start_col <- (i - 1) * 9 + 1
+  end_col <- min(i * 9, num_cols)
+  
+  for (col in numeric_cols[start_col:end_col]) {
+    plot(selected_data1[[col]], selected_data1$Life.expectancy,
+         main = paste( col, "vs. Life Expectancy"),
+         xlab = col,
+         ylab = "Life Expectancy",
+         pch = 16,  # Set point character
+         col = "blue")  # Set point color
+    
+    abline(lm(Life.expectancy ~ ., data = selected_data1[, c(col, "Life.expectancy")]),
+           col = "red", lwd = 2)
+  }
+  
+  par(mfrow = c(1, 1))
+}
+```
+
+# 6.2 Building Linear multiple regression model
+
+```{r}
+full_model <- lm(Life.expectancy ~ ., data = selected_data1)
+summary(full_model)
+
+```
+
+# 6.3 Model Diagnostics
+
+```{r}
+# Fit the model
+full_model <- lm(Life.expectancy ~ ., data = selected_data1)
+     
+# Q-Q plot of residuals to check normality
+qqnorm(full_model$residuals, main="Q-Q Plot of Residuals")
+qqline(full_model$residuals, col="red")
+
+```
+
+# 6.4 Model Refinement
+
+#Building Linear multiple regression model with only significant predictors
+
+```{r}
+significant_model <- lm(Life.expectancy ~ Status + Adult.Mortality + infant.deaths + 
+                        percentage.expenditure + Hepatitis.B + under.five.deaths +
+                        Diphtheria + HIV.AIDS + Income.composition.of.resources +
+                        thinness.5.9.years + Schooling, data = selected_data1)
+
+summary(significant_model)
+
+```
+```{r}
+# Q-Q plot of residuals
+qqnorm(residuals(significant_model))
+qqline(residuals(significant_model))
+```
+
+```{r}
+data <- selected_data1 
+significant_predictors <- c("Status", "Adult.Mortality", "infant.deaths", 
+                            "percentage.expenditure", "Hepatitis.B", "under.five.deaths", 
+                            "Diphtheria", "HIV.AIDS", "Income.composition.of.resources", 
+                            "thinness.5.9.years", "Schooling")
+for (predictor in significant_predictors) {
+  p <- ggplot(data, aes_string(x = predictor, y = "Life.expectancy")) + 
+    geom_point(alpha = 0.5) + 
+    geom_smooth(method = "lm", se = FALSE, color = "blue") +
+    labs(title = paste("Scatter Plot of Life Expectancy vs", predictor),
+         x = predictor,
+         y = "Life Expectancy") +
+    theme_minimal()
+  
+  print(p) # Display the plot
+}
+
+```
+
+#6.5 Checking the Assumptions of the Significant Model
+
+#Histogram of Residuals
+
+```{r}
+residuals_data <- data.frame(residuals = residuals(significant_model))
+ggplot(residuals_data, aes(x = residuals)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.5, color = "black", fill = "gray") +
+  geom_density(alpha = 0.75, fill = "blue") +
+  ggtitle("Histogram of Residuals with Normal Curve") +
+  xlab("Residuals") +
+  ylab("Density")
+```
+
+#Residual Plot
+
+```{r}
+ggplot(residuals_data, aes(x = fitted(significant_model), y = residuals)) +
+  geom_point(aes(color = residuals), alpha = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residual Plot", x = "Fitted Values", y = "Residuals") +
+  theme_minimal()
+```
+
+
+
